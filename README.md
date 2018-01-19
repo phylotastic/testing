@@ -5,10 +5,10 @@ Testing using selenium for phylotastic services
 
 Using `RSelenium` package to help automate testing: https://cran.r-project.org/web/packages/RSelenium/vignettes/RSelenium-basics.html.
 
-Following instructions on their website:
+Following instructions on their website, but changing to deal with issues with their listed selenium
 
 ```
-docker run -d -p 5901:5900 -p 127.0.0.1:4445:4444 --link http-server selenium/standalone-firefox-debug:2.53.1
+docker run -d -p 4444:4444 -v /dev/shm:/dev/shm selenium/standalone-chrome:3.8.1-erbium
 ```
 
 Within R:
