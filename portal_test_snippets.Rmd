@@ -1,0 +1,194 @@
+---
+title: "Selenium"
+author: "Arlin Stoltzfus"
+date: "1/19/2018"
+output: html_document
+---
+
+# Automating portal testing using Selenium and RSelenium
+
+
+
+## Purpose
+
+The Phylotastic project identified reliability and robustness of the portal as a priority for 2018.  Tests of the portal interface will reveal bugs and interruptions in underlying services that prevent operations from being completed.  If tests can be automated, they can be run at regular intervals. 
+
+## Overview 
+
+Based on recommendations, we chose Selenium as a tool for browser automation.  RSelenium provides an interface to interact with the Seleniums server.  The browser can then be automated using R commands, which means that automated tests can be performed using test_that. 
+
+A MacBook running OSX 10.12.6 was configued to run Selenium and RSelenium.  Multiple difficulties were encountered using the Safari browser, therefore Chrome was chosen instead.
+
+Some progress was made in running the portal from R.  However, it is apparently not possible to test the portal thoroughly and directly, without using JavaScript.  
+
+See the explanation of work in progress.  
+
+## References 
+
+Installing Selenium
+* https://stackoverflow.com/questions/18868743/how-to-install-selenium-webdriver-on-mac-os
+
+Installing chromedriver 
+* http://www.kenst.com/2015/03/installing-chromedriver-on-mac-osx/
+
+Using RSelenium for automation and testing 
+* https://ropensci.org/tutorials/rselenium_tutorial/
+* https://cran.r-project.org/web/packages/RSelenium/vignettes/RSelenium-basics.html
+* https://cran.r-project.org/web/packages/RSelenium/vignettes/shinytesting.html
+
+## Requirements and setup  
+
+The tests below use Chrome and RSelenium.  You need to have 
+* the Selenium server running on port 4444
+* the chrome driver (chromedriver) installed
+* the RSelenium package installed
+
+If you run Selenium from docker, the port may be different (4445). I simply downloaded it and ran it directly using Java with 
+
+> java -jar selenium-server-standalone-3.8.1.jar
+
+Chromedriver was installed using the 
+
+## Explanation of work in progress, and suggested next steps
+
+This document is a work in progress developed during the Phylotastic Project meeting in Las Cruces, 18 to 20 January, 2018.  It consists mainly of notes and snippets of code that interrogate (or attempt to interrogate) the portal.  
+
+Many of the things that were tried do not work as expected.  Various aspects of the portal interface are not directly accessible to RSelenium from the DOM.  Presumably they can be accessed with JavaScript.  
+
+Due to these difficulties, currently there is no automated test suite.  However, the snippets below could be used to test that each 5 tabbed views (home, trees, help, about, feedback) can be opened with the expected page title.  
+
+Based on this, I recommend the following approach  
+* do what is easy 
+   * write code to test that the 5 tabbed views are live, as described above 
+   * expand this to include any other view with its own URL and title
+   * set up automated execution of the test 
+   * set up reporting based on automated execution of the test
+* assess needs for greater control of automation 
+   * pick an important workflow and, using the portal interactively, write down the manual procedure for a few tests
+   * determine which parts of the manual test plan can be automated directly
+   * based on this, make a plan to address gaps
+
+## Code snippets 
+
+Define some constants.  This all works. 
+```{r defs}
+# currently not calling this in R
+# se_server_file <- "~/Desktop/Selenium_temp/selenium-server-standalone-3.8.1.jar"
+pt_production_url <- "http://phylo.cs.nmsu.edu:3000/"
+pt_dev_url <- "http://phylo.cs.nmsu.edu:3001/"
+
+# to do: re-factor to apply entire set of tests to dev or prod as argument
+pt_home <- pt_production_url
+
+# make a dataframe to describe 5 views
+views <- c("home", "trees", "help", "feedback", "about")
+view_urls <- paste(paste(pt_home, "static_pages", sep = ""), views[3:5], sep = "/")
+view_urls <- c(pt_home, paste(pt_home, views[2], sep = ""), view_urls)
+titles <- paste(c("Home", "Tree Viewer", "Help", "Feedback", "About"), "Phylotastic Web Portal", sep = " | ")
+views_dat <- data.frame(view = views, title = titles, url = view_urls)
+```
+
+Get things set up and start the server.  This works. 
+```{r setup, include=FALSE}
+
+require(RSelenium)
+require(testthat)
+
+remDr <- remoteDriver(remoteServerAddr = "localhost", port = 4444L, browserName = "chrome")
+# remDr <- remoteDriver(remoteServerAddr = "localhost", port = 4444L, browserName = "safari")
+
+remDr$open(silent = TRUE)
+remDr$getStatus
+remDr$close
+```
+
+Test that we can navigate to app.  This works. 
+```{r}
+remDr$open()
+test_that("can connect to portal", {  
+  remDr$navigate(pt_home)
+  appTitle <- remDr$getTitle()[[1]]
+  expect_equal(appTitle, "Home | Phylotastic Web Portal")  
+})
+```
+
+Question: should I close the remote driver between tests? 
+
+Navigate to some pages.  
+```{r}
+# navigate to the 5 views in views_dat
+```
+
+Take a screenshot of something.  Save or view in RStudio's viewer. 
+```{r}
+remDr$maxWindowSize()
+
+# save a screenshot 
+scr <- remDr$screenshot()
+
+# display
+remDr$screenshot(display = TRUE)
+```
+
+Run the portal workflow to scrape names from a web page.  This works, but I haven't figured out how to verify the content of the list. 
+
+```{r}
+remDr$navigate("http://phylo.cs.nmsu.edu:3000/con_links/new")
+webElem <- remDr$findElement(using = 'id', value = "con_link_name")
+webElem$sendKeysToElement(list("wikipedia ants page"))
+
+webElem <- remDr$findElement(using = 'id', value = "con_link_uri")
+webElem$sendKeysToElement(list("https://en.wikipedia.org/wiki/Ant", key = "enter"))
+```
+
+Next: download list.  save that.  compare to reference copy. This does not work. 
+```{r}
+# webElem <- remDr$findElement(using = 'partial link text', value = "list")
+# webElem$getClass()
+
+# doesn't work
+webElem <- remDr$findElement(using = 'partial link text', value = "Download")
+webElem$clickElement()
+
+
+webElem <- remDr$findElement(using = 'partial link text', value = "report")
+
+```
+
+
+Delete the list. I can find the delete button and press it. But then I can't figure out how to respond to the pop-up that asks for confirmation. 
+
+```{r}
+webElem <- remDr$findElement(using = 'partial link text', value = "Delete")
+webElem$clickElement()
+
+```
+
+A bit of code copied from the shinytesting vignette.
+
+```{r}
+remDr$navigate("http://spark.rstudio.com/johnharrison/shinytestapp/")
+webElems <- remDr$findElements("css selector", "#ctrlSelect input")
+lapply(webElems, function(x){x$clickElement()})
+scr <- remDr$screenshot(display = TRUE)
+```
+
+Select public trees, get a tree to view.  I can't figure out how to do this. 
+```{r}
+remDr$navigate(views_dat$url[views_dat$view == "trees"])
+# doesn't work
+remDr$findElement(using = "partial link text", value = "Repository")
+# doesn't allow compound val
+remDr$findElement(using = 'class name', value = "btn btn-default dropdown-toggle")
+# this works
+webElem <- remDr$findElement(using = 'class name', value = "dropdown-toggle")
+
+webElem$getElementAttribute("id")
+```
+
+Close the driver. 
+
+```{r}
+remDr$close()
+```
+
